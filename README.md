@@ -68,7 +68,7 @@ Feel free to reach out for:
 
 **Vishnu Veenadharan**  
 📧 Email: _vichu852002@gmail.com_  
-🌐 GitHub: [github.com/Vishnu852002]
+🌐 GitHub: [www.github.com/Vishnu852002]
 
 ---
 
