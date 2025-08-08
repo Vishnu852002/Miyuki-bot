@@ -2,6 +2,8 @@
 
 A self-contained Python bot designed to autonomously fetch trending news, generate original summaries, and post them to Twitter/X — all with an elegant, personality-infused tone powered by **Meta LLaMA 3.1 8B Instruct (GGUF)**.
 
+Bot link: [www.x.com/astarionyx]
+
 > ⚠️ Source code is **not public** due to proprietary design, security considerations, and future deployment plans.
 
 ---
