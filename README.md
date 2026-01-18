@@ -1,6 +1,6 @@
 # miyuki-bot 🤖
 
-yo so i built this twitter bot that posts anime/gaming/tech stuff automatically. it uses ollama for generation so everything runs locally on your machine (no api costs lol)
+yo so i built this twitter bot that posts anime/gaming/tech stuff automatically. it uses ollama for generation so everything runs locally on your machine (no api costs, if u have money go nuts, interval can be reduced and newsapi give u latest news too.)
 
 ## what it does
 
@@ -93,10 +93,10 @@ the bot:
 ## todo
 
 - [ ] add scheduling (post at specific times of day)
-- [ ] thread support (multi-tweet threads)
-- [ ] reply to mentions maybe?
-- [ ] different posting frequency by time of day
-- [ ] mastodon support?
+- [ ] thread support (multi-tweet threads, I think it's paid?)
+- [ ] reply to mentions maybe? (paid stuff on X API so i didnt go there...Although I could add it)
+- [ ] different posting frequency by time of day (Easy to add, but i didn't find it interesting...)
+- [ ] will add duckduckgo search (ddgs) for more freshness...
 
 ## faq
 
