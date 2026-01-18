@@ -5,7 +5,7 @@ yo so i built this twitter bot that posts anime/gaming/tech stuff automatically.
 ## what it does
 
 - fetches real news from NewsAPI and comments on them
-- generates tweets using local LLM (ollama) - no paying for openai
+- generates tweets using local LLM (ollama) - no paying for openai/google cloud api
 - can post to twitter if you have api keys, otherwise just simulates
 - remembers what it posted so it doesnt repeat itself
 - has a monthly post limit so you dont go crazy
@@ -27,7 +27,7 @@ cp .env.example .env
 pip install -r requirements.txt
 ```
 
-3. make sure ollama is running:
+3. make sure ollama is running (I suggest using deepseek-r1 or anyother thinking model, only if u have a good pc with huge vram, ram and good cpu):
 ```bash
 ollama run gemma3:4B
 ```
@@ -45,6 +45,7 @@ TWITTER_API_KEY=
 TWITTER_API_SECRET=
 TWITTER_ACCESS_TOKEN=
 TWITTER_ACCESS_SECRET=
+TWITTER_BEARER_TOKEN=
 
 # personality
 PERSONALITY_MODE=chill    # options: chill, hyped, shitpost
@@ -58,7 +59,7 @@ SIMULATION_MODE=false     # set to true to allow creative prompts (testing only)
 
 - **chill** (default): relaxed, casual, lowercase vibes. just hangin out
 - **hyped**: ENERGY!! emojis, caps, excitement. for when u want engagement
-- **shitpost**: chaotic. weird grammar. ironic. use at ur own risk lmao
+- **shitpost**: chaotic. weird grammar. ironic. use at ur own risk
 
 ## running
 
