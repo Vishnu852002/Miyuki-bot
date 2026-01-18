@@ -3,7 +3,7 @@ tweet_memory_*.json
 bot_analytics.json
 monthly_count.json
 
-# images folder (usually too big for git)
+# images folder
 images/
 
 # python stuff
