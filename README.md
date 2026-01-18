@@ -99,11 +99,9 @@ the bot:
 ## todo
 
 - [x] newsapi integration
-- [ ] duckduckgo search (coming in v2)
 - [ ] add scheduling (post at specific times of day)
 - [ ] thread support (multi-tweet threads, paid api?)
 - [ ] reply to mentions (paid api)
-- [ ] mastodon support?
 - [ ] will add duckduckgo search (ddgs) for more freshness...
 
 ## faq
