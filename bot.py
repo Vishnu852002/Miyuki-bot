@@ -1,19 +1,25 @@
 """
 miyuki-bot - a twitter bot that posts anime/gaming/tech stuff
 
-basically just runs ollama locally, generates tweets, and posts them
+uses newsapi to get real headlines, then asks ollama to comment on them
 if you dont have twitter keys it just simulates (prints to console)
 
 quick start:
+    cp .env.example .env  # fill in your keys
     pip install -r requirements.txt
-    ollama run gemma3:4B  # or whatever model
+    ollama run gemma3:4B
     python bot.py
-
-set TWITTER_* env vars if you want to actually post
 """
 from __future__ import annotations
 
-VERSION = "1.1.0"
+# load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # loads from .env in current directory
+except ImportError:
+    pass
+
+VERSION = "1.1.1"
 
 import os
 import sys
@@ -22,7 +28,6 @@ import time
 import logging
 import random
 import datetime
-import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -46,6 +51,7 @@ TWITTER_API_KEY = os.getenv("TWITTER_API_KEY", "")
 TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET", "")
 TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "")
 TWITTER_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET", "")
+TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "")
 
 # Operational settings
 POST_INTERVAL_SECONDS = int(os.getenv("POST_INTERVAL_SECONDS", str(30 * 60)))  # default 30 minutes
@@ -61,7 +67,9 @@ MEMORY_FILES = {
     "facts": Path("tweet_memory_facts.json"),
     "questions": Path("tweet_memory_questions.json"),
 }
-CACHE_DURATION = int(os.getenv("CACHE_DURATION", str(60 * 60)))  # seconds
+
+# simulation mode - allows creative prompts without real news (for testing only)
+SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() == "true"
 
 # personality & content settings
 PERSONALITY_MODE = os.getenv("PERSONALITY_MODE", "chill")  # chill, hyped, shitpost
@@ -235,7 +243,7 @@ def load_history(mem_file: Path) -> List[Dict[str, Any]]:
 # --- Health monitoring ---
 
 def health_check() -> Dict[str, bool]:
-    status = {"ollama": False, "twitter": False, "newsapi": False, "disk_space": False}
+    status = {"ollama": False, "twitter": False, "newsapi": False}
     # Ollama
     try:
         r = requests.get(f"{OLLAMA_BASE_URL}/", timeout=2)
@@ -246,13 +254,34 @@ def health_check() -> Dict[str, bool]:
     status["twitter"] = TWEETY_AVAILABLE and twitter_client is not None
     # NewsAPI
     status["newsapi"] = bool(NEWSAPI_KEY)
-    # Disk space
-    try:
-        free_bytes = os.statvfs(str(IMAGE_FOLDER)).f_bavail * os.statvfs(str(IMAGE_FOLDER)).f_frsize
-        status["disk_space"] = free_bytes > (1024**3)
-    except Exception:
-        status["disk_space"] = True
     return status
+
+# --- NewsAPI integration ---
+
+def fetch_news_headlines(category: str = "tech", max_results: int = 5) -> List[str]:
+    """fetch real headlines from newsapi"""
+    if not NEWSAPI_KEY:
+        logger.debug("no newsapi key set")
+        return []
+    try:
+        # map our categories to newsapi categories
+        category_map = {
+            "anime": "entertainment",
+            "gaming": "entertainment",
+            "tech": "technology",
+        }
+        api_category = category_map.get(category, "technology")
+        url = f"https://newsapi.org/v2/top-headlines?category={api_category}&language=en&pageSize={max_results}&apiKey={NEWSAPI_KEY}"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        articles = data.get("articles", [])
+        headlines = [a.get("title", "") for a in articles if a.get("title")]
+        logger.debug("fetched %d headlines for %s", len(headlines), category)
+        return headlines
+    except Exception as e:
+        logger.warning("newsapi fetch failed: %s", e)
+        return []
 
 # --- Ollama generation ---
 
@@ -278,17 +307,6 @@ def build_system_prompt(category: str = "anime") -> str:
         "Keep it under 250 characters. Dont use quotes around the tweet. Just output the tweet text, nothing else."
     )
 
-
-def generate_with_ollama(user_prompt: str, image_path: Optional[Path] = None) -> Optional[str]:
-    messages = [{"role": "system", "content": build_system_prompt()}, {"role": "user", "content": user_prompt}]
-    b64 = get_image_b64(image_path) if image_path else None
-    if b64 and isinstance(messages[1], dict):
-        messages[1]["images"] = [b64]
-    payload = {"model": OLLAMA_MODEL, "messages": messages, "stream": False, "options": {"temperature": 0.7, "num_predict": 100}}
-    res = ollama_request_with_retry("api/chat", payload)
-    if res:
-        return res.get("message", {}).get("content", "").strip()
-    return None
 
 
 def generate_with_ollama_v2(user_prompt: str, category: str, image_path: Optional[Path] = None) -> Optional[str]:
@@ -326,7 +344,7 @@ def init_twitter_client() -> None:
         return
     try:
         twitter_client = tweepy.Client(
-            bearer_token=None,  # bearer not required for OAuth1.0a post-only flow
+            bearer_token=TWITTER_BEARER_TOKEN or None,
             consumer_key=TWITTER_API_KEY,
             consumer_secret=TWITTER_API_SECRET,
             access_token=TWITTER_ACCESS_TOKEN,
@@ -412,9 +430,23 @@ def try_post_generated() -> bool:
     mem_file = MEMORY_FILES.get("questions")
     history = load_history(mem_file)
     
-    # pick random category and prompt
+    # pick random category
     category = pick_random_category()
-    prompt = pick_random_prompt(category)
+    
+    # try to get real news first
+    headlines = fetch_news_headlines(category)
+    if headlines:
+        headline = random.choice(headlines)
+        prompt = f"React to or give your opinion on this news headline: '{headline}'"
+        logger.info("using news: %s", headline[:60])
+    elif SIMULATION_MODE:
+        # simulation mode only - use creative prompts for testing
+        prompt = pick_random_prompt(category)
+        logger.info("[SIMULATION] no news, using creative prompt")
+    else:
+        # no news and not in simulation mode = skip posting
+        logger.info("no news available, skipping post (set SIMULATION_MODE=true for testing)")
+        return False
     
     image_path = pick_random_image_path()
     text = generate_with_ollama_v2(prompt, category, image_path)

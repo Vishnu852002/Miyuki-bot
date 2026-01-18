@@ -1,53 +1,57 @@
 # miyuki-bot 🤖
 
-yo so i built this twitter bot that posts anime/gaming/tech stuff automatically. it uses ollama for generation so everything runs locally on your machine (no api costs lol)
+yo so i built this twitter bot that posts anime/gaming/tech stuff automatically. uses newsapi to get real headlines, then asks ollama to comment on them. runs locally (no openai costs)
 
 ## what it does
 
+- fetches real news from NewsAPI and comments on them
 - generates tweets using local LLM (ollama) - no paying for openai
 - can post to twitter if you have api keys, otherwise just simulates
 - remembers what it posted so it doesnt repeat itself
 - has a monthly post limit so you dont go crazy
 - can attach random images from a folder
-- **NEW:** personality modes - make it chill, hyped, or go full shitpost mode
-- **NEW:** quiet hours - wont post when ur asleep
-- **NEW:** varied prompts - randomly picks different content styles
+- personality modes - make it chill, hyped, or go full shitpost mode
+- quiet hours - wont post when ur asleep
+- hashtag support
 
 ## setup
 
+1. copy the env template and fill in your keys:
+```bash
+cp .env.example .env
+# edit .env with your NEWSAPI_KEY and optionally twitter keys
+```
+
+2. install deps:
 ```bash
 pip install -r requirements.txt
 ```
 
-make sure ollama is running first:
+3. make sure ollama is running:
 ```bash
 ollama run gemma3:4B
 ```
 
 ## env vars
 
-```bash
-# required
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=gemma3:4B  # or whatever model u want
+check `.env.example` for all options. the main ones:
 
-# optional - leave these blank to run in simulation mode (good for testing)
+```bash
+# required for real news
+NEWSAPI_KEY=your_key_here  # get one at newsapi.org
+
+# twitter (optional - leave blank for simulation mode)
 TWITTER_API_KEY=
 TWITTER_API_SECRET=
 TWITTER_ACCESS_TOKEN=
 TWITTER_ACCESS_SECRET=
 
-# personality stuff (this is the fun part)
+# personality
 PERSONALITY_MODE=chill    # options: chill, hyped, shitpost
-USE_HASHTAGS=true         # set to false if u hate hashtags
-QUIET_HOURS_START=2       # dont post between 2am and 7am
-QUIET_HOURS_END=7
+USE_HASHTAGS=true
 
-# other settings
-NEWSAPI_KEY=              # if u want news integration
-POST_INTERVAL_SECONDS=1800  # how often to post (default 30 min)
-MAX_POSTS_PER_MONTH=500
-IMAGE_FOLDER=./images     # put images here and itll randomly attach them
+# testing without real news
+SIMULATION_MODE=false     # set to true to allow creative prompts (testing only)
 ```
 
 ### personality modes
@@ -76,13 +80,15 @@ health check: ollama=ok twitter=simulation mode
 
 the bot:
 1. picks a random category (anime/gaming/tech)
-2. picks a random prompt from that category
-3. generates content using ollama with the personality mode
+2. fetches real news headlines from NewsAPI
+3. asks ollama to comment on a headline
 4. checks if its too similar to recent posts (to avoid spam)
 5. maybe adds a hashtag (40% chance if enabled)
 6. posts to twitter or just logs it (simulation mode)
 7. saves everything so it can remember what its already said
 8. sleeps until next cycle
+
+> note: if no news is available and SIMULATION_MODE is off, it skips posting (no fake news)
 
 ## files it creates
 
@@ -92,10 +98,10 @@ the bot:
 
 ## todo
 
+- [x] newsapi integration
+- [ ] duckduckgo search (coming in v2)
 - [ ] add scheduling (post at specific times of day)
 - [ ] thread support (multi-tweet threads)
-- [ ] reply to mentions maybe?
-- [ ] different posting frequency by time of day
 - [ ] mastodon support?
 
 ## faq

@@ -3,6 +3,9 @@ tweet_memory_*.json
 bot_analytics.json
 monthly_count.json
 
+# env with secrets
+.env
+
 # images folder
 images/
 
