@@ -1,33 +1,20 @@
-"""MiyukiBot v1.0
-Professional, privacy-safe, and GitHub-ready Twitter/Content bot skeleton.
-
-Features:
-- Ollama-based generation (local Ollama server)
-- Optional Twitter posting via Tweepy (reads credentials from environment variables)
-- Simulation mode if credentials are missing or when disabled
-- Configurable via environment variables
-- Health checks, safe defaults, and clear logging
-- No personal data, hard-coded paths, or user-identifying comments
-
-Usage:
-1. Create a virtualenv and install requirements:
-   pip install -r requirements.txt
-   (requirements.txt should include: requests, tweepy)
-2. Set environment variables (example):
-   export OLLAMA_BASE_URL="http://localhost:11434"
-   export OLLAMA_MODEL="gemma3:4B"
-   export TWITTER_API_KEY="..."
-   export TWITTER_API_SECRET="..."
-   export TWITTER_ACCESS_TOKEN="..."
-   export TWITTER_ACCESS_SECRET="..."
-   export NEWSAPI_KEY="..."  # optional
-3. Run:
-   python newsbot_clean.py
-
-The script is intentionally modular and documented for easy contribution on GitHub.
 """
+miyuki-bot - a twitter bot that posts anime/gaming/tech stuff
 
+basically just runs ollama locally, generates tweets, and posts them
+if you dont have twitter keys it just simulates (prints to console)
+
+quick start:
+    pip install -r requirements.txt
+    ollama run gemma3:4B  # or whatever model
+    python bot.py
+
+set TWITTER_* env vars if you want to actually post
+"""
 from __future__ import annotations
+
+VERSION = "1.1.0"
+
 import os
 import sys
 import json
@@ -51,7 +38,7 @@ except Exception:
 
 # --- Configuration ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4B")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4B")   # or whatever model u want. search on ollama.com/search for models
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "")
 
 # Twitter credentials via env (leave empty to run in simulation mode)
@@ -75,6 +62,49 @@ MEMORY_FILES = {
     "questions": Path("tweet_memory_questions.json"),
 }
 CACHE_DURATION = int(os.getenv("CACHE_DURATION", str(60 * 60)))  # seconds
+
+# personality & content settings
+PERSONALITY_MODE = os.getenv("PERSONALITY_MODE", "chill")  # chill, hyped, shitpost
+USE_HASHTAGS = os.getenv("USE_HASHTAGS", "true").lower() == "true"
+QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "2"))  # hour to stop posting (24h)
+QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "7"))  # hour to resume posting
+
+# different prompts to keep things interesting  
+PROMPT_TEMPLATES = {
+    "anime": [
+        "share a hot take about a popular anime",
+        "recommend an underrated anime that deserves more love",
+        "complain about a common anime trope in a funny way",
+        "describe what its like waiting for your favorite anime to get a new season",
+        "make a joke about anime fans",
+    ],
+    "gaming": [
+        "share a gaming opinion thatll start arguments",
+        "describe a frustrating gaming moment everyone can relate to",
+        "recommend an indie game people are sleeping on",
+        "make fun of a gaming trend",
+        "share a nostalgic gaming memory",
+    ],
+    "tech": [
+        "complain about a tech problem everyone deals with",
+        "share a hot take about a popular tech product",
+        "joke about programmers or tech workers",
+        "share a tech tip in a casual way",
+        "make fun of tech hype",
+    ],
+}
+
+PERSONALITY_PROMPTS = {
+    "chill": "Write in a relaxed, casual tone. Be friendly but not too excited. Use lowercase mostly.",
+    "hyped": "Write with energy and enthusiasm! Use caps sometimes, emojis are okay. Be fun!",
+    "shitpost": "Write in an ironic, slightly unhinged way. Be absurd but still coherent. very lowercase, questionable grammar is a vibe",
+}
+
+HASHTAGS = {
+    "anime": ["#anime", "#weeb", "#otaku", "#animememes"],
+    "gaming": ["#gaming", "#gamer", "#videogames", "#indiegames"],
+    "tech": ["#tech", "#programming", "#coding", "#developer"],
+}
 
 # Logging configuration
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -240,10 +270,12 @@ def ollama_request_with_retry(endpoint: str, payload: Dict[str, Any], max_retrie
     return None
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(category: str = "anime") -> str:
+    personality_hint = PERSONALITY_PROMPTS.get(PERSONALITY_MODE, PERSONALITY_PROMPTS["chill"])
     return (
-        "You are an assistant that outputs a single short social-media-ready post about anime, gaming, or tech. "
-        "Produce a concise, non-offensive post suitable for public social platforms. Output only the text of the post."
+        f"You are a twitter account that posts about {category}. "
+        f"{personality_hint} "
+        "Keep it under 250 characters. Dont use quotes around the tweet. Just output the tweet text, nothing else."
     )
 
 
@@ -253,6 +285,30 @@ def generate_with_ollama(user_prompt: str, image_path: Optional[Path] = None) ->
     if b64 and isinstance(messages[1], dict):
         messages[1]["images"] = [b64]
     payload = {"model": OLLAMA_MODEL, "messages": messages, "stream": False, "options": {"temperature": 0.7, "num_predict": 100}}
+    res = ollama_request_with_retry("api/chat", payload)
+    if res:
+        return res.get("message", {}).get("content", "").strip()
+    return None
+
+
+def generate_with_ollama_v2(user_prompt: str, category: str, image_path: Optional[Path] = None) -> Optional[str]:
+    """newer version that uses category-aware prompts"""
+    messages = [
+        {"role": "system", "content": build_system_prompt(category)}, 
+        {"role": "user", "content": user_prompt}
+    ]
+    b64 = get_image_b64(image_path) if image_path else None
+    if b64 and isinstance(messages[1], dict):
+        messages[1]["images"] = [b64]
+    
+    # slightly higher temp for more creative outputs
+    temp = 0.8 if PERSONALITY_MODE == "shitpost" else 0.7
+    payload = {
+        "model": OLLAMA_MODEL, 
+        "messages": messages, 
+        "stream": False, 
+        "options": {"temperature": temp, "num_predict": 120}
+    }
     res = ollama_request_with_retry("api/chat", payload)
     if res:
         return res.get("message", {}).get("content", "").strip()
@@ -312,27 +368,84 @@ def post_tweet(text: str, image_path: Optional[Path] = None) -> Optional[str]:
 
 # --- Content generators ---
 
+def is_quiet_hours() -> bool:
+    """check if we're in quiet hours (dont post late at night)"""
+    hour = datetime.datetime.now().hour
+    if QUIET_HOURS_START < QUIET_HOURS_END:
+        return QUIET_HOURS_START <= hour < QUIET_HOURS_END
+    else:  # wraps around midnight
+        return hour >= QUIET_HOURS_START or hour < QUIET_HOURS_END
+
+
+def pick_random_category() -> str:
+    """pick a random content category"""
+    return random.choice(list(PROMPT_TEMPLATES.keys()))
+
+
+def pick_random_prompt(category: str) -> str:
+    """get a random prompt for the category"""
+    prompts = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["anime"])
+    return random.choice(prompts)
+
+
+def maybe_add_hashtags(text: str, category: str) -> str:
+    """sometimes add a hashtag or two"""
+    if not USE_HASHTAGS:
+        return text
+    if random.random() > 0.6:  # 40% chance to add hashtags
+        return text
+    tags = HASHTAGS.get(category, [])
+    if tags:
+        tag = random.choice(tags)
+        if len(text) + len(tag) < 275:  # leave room
+            text = f"{text} {tag}"
+    return text
+
+
 def try_post_generated() -> bool:
+    # check quiet hours
+    if is_quiet_hours():
+        logger.info("in quiet hours, skipping post")
+        return False
+    
     ensure_memory_files()
     mem_file = MEMORY_FILES.get("questions")
     history = load_history(mem_file)
-    prompt = "Write a concise, neutral, and interesting observation about anime/gaming/tech suitable for a general audience."
+    
+    # pick random category and prompt
+    category = pick_random_category()
+    prompt = pick_random_prompt(category)
+    
     image_path = pick_random_image_path()
-    text = generate_with_ollama(prompt, image_path)
+    text = generate_with_ollama_v2(prompt, category, image_path)
     if not text:
         logger.debug("No text generated")
         return False
+    
+    # clean up the text a bit
+    text = text.strip('"').strip("'").strip()
+    
     if is_similar_to_history(text, history, SIMILARITY_THRESHOLD):
         logger.debug("Generated text too similar to history; skipping")
         return False
+    
+    # maybe add hashtags
+    text = maybe_add_hashtags(text, category)
+    
     tweet_id = post_tweet(text, image_path)
+    
     # Save memory
-    entry = {"text": text, "timestamp": datetime.datetime.now().isoformat(), "category": "generated"}
+    entry = {
+        "text": text, 
+        "timestamp": datetime.datetime.now().isoformat(), 
+        "category": category,
+        "personality": PERSONALITY_MODE
+    }
     history.append(entry)
     save_json(mem_file, history)
+    
     if tweet_id:
-        # track analytics basic
-        track_tweet_performance(str(tweet_id), text, "generated")
+        track_tweet_performance(str(tweet_id), text, category)
     increment_count()
     return True
 
@@ -347,29 +460,43 @@ def track_tweet_performance(tweet_id: str, text: str, category: str) -> None:
 # --- Main loop ---
 
 def main_run():
-    logger.info("MiyukiBot starting. Interval %d seconds", POST_INTERVAL_SECONDS)
+    logger.info("=" * 50)
+    logger.info("miyuki-bot v%s starting up!", VERSION)
+    logger.info("personality: %s | interval: %ds | hashtags: %s", 
+                PERSONALITY_MODE, POST_INTERVAL_SECONDS, USE_HASHTAGS)
+    if QUIET_HOURS_START != QUIET_HOURS_END:
+        logger.info("quiet hours: %d:00 - %d:00", QUIET_HOURS_START, QUIET_HOURS_END)
+    logger.info("=" * 50)
+    
     init_twitter_client()
-    logger.info("Initial health: %s", health_check())
+    health = health_check()
+    logger.info("health check: ollama=%s twitter=%s", 
+                "ok" if health["ollama"] else "nope", 
+                "ok" if health["twitter"] else "simulation mode")
+    
     cycle = 0
     while True:
         try:
             cycle += 1
-            logger.info("Cycle #%d", cycle)
+            logger.info("--- cycle %d ---", cycle)
+            
             if can_post():
                 posted = try_post_generated()
                 if posted:
-                    logger.info("Posted content in cycle %d", cycle)
+                    logger.info("posted something! nice")
                 else:
-                    logger.info("No content posted in cycle %d", cycle)
+                    logger.info("nothing posted this cycle (maybe quiet hours or similar content)")
             else:
-                logger.info("Skipping post due to monthly limit")
-            logger.info("Sleeping %d seconds", POST_INTERVAL_SECONDS)
+                logger.info("at monthly limit, chilling")
+            
+            logger.info("sleeping for %d seconds...", POST_INTERVAL_SECONDS)
             time.sleep(POST_INTERVAL_SECONDS)
+            
         except KeyboardInterrupt:
-            logger.info("Shutting down")
+            logger.info("shutting down, bye!")
             break
         except Exception as e:
-            logger.exception("Unexpected error in main loop: %s", e)
+            logger.exception("oop something broke: %s", e)
             time.sleep(60)
 
 

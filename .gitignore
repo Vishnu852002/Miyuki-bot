@@ -1,0 +1,24 @@
+# generated files
+tweet_memory_*.json
+bot_analytics.json
+monthly_count.json
+
+# images folder (usually too big for git)
+images/
+
+# python stuff
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ide stuff
+.vscode/
+.idea/
+
+# misc
+*.log
+.DS_Store
+Thumbs.db
