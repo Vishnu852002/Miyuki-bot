@@ -101,15 +101,10 @@ the bot:
 - [x] newsapi integration
 - [ ] duckduckgo search (coming in v2)
 - [ ] add scheduling (post at specific times of day)
-<<<<<<< HEAD
-- [ ] thread support (multi-tweet threads)
+- [ ] thread support (multi-tweet threads, paid api?)
+- [ ] reply to mentions (paid api)
 - [ ] mastodon support?
-=======
-- [ ] thread support (multi-tweet threads, I think it's paid?)
-- [ ] reply to mentions maybe? (paid stuff on X API so i didnt go there...Although I could add it)
-- [ ] different posting frequency by time of day (Easy to add, but i didn't find it interesting...)
 - [ ] will add duckduckgo search (ddgs) for more freshness...
->>>>>>> d6cfadad028450f8c018a3b21c82820e40885230
 
 ## faq
 
